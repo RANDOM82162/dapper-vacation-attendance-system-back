@@ -1,0 +1,31 @@
+services:
+  mongo_db:
+    container_name: dapper_database_container
+    image: mongo:latest
+    restart: always
+    ports:
+      - "27018:27017"
+    volumes:
+      - ./mongo-init:/docker-entrypoint-initdb.d:ro
+      - mongo_data:/data/db # <- Persist MongoDB data here
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      PORT: 8080
+      PROJECT_ID: "proyecto_backend"
+      CONNECTION_STRING: mongodb://mongo_db:27017/proyecto-dev
+      DB_NAME: "proyecto-dev"
+      ENCRYPTION_SECRET: "monetaultrasecret"
+    depends_on:
+      - mongo_db
+
+volumes:
+  mongo_data:
