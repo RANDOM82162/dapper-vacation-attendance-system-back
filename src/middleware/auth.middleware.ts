@@ -3,6 +3,8 @@ import { auth } from '../shared/database/firebase';
 import { BaseError } from '../shared/classes/base-error';
 import { HttpStatusCode } from '../shared/models/http.model';
 import { ANALYTICS_PERMISSIONS, ROLES } from './auth.enum';
+import { connect } from '../shared/database/mongodb';
+import { EmployeeStatus } from '../api/employees/employeesDto';
 
 export class AuthMiddleware {
 
@@ -15,13 +17,27 @@ export class AuthMiddleware {
             }
 
             const token = authHeader.split(' ')[1];
-            const decodedToken = await auth().verifyIdToken(token);
+            const decodedToken = await auth().verifyIdToken(token, true);
+            const employee = await getEmployeeAuthProfile(decodedToken.uid, decodedToken.email);
+            if (!employee) {
+                return res.status(403).json({ msg: 'Usuario sin empleado vinculado' });
+            }
+
+            if (employee.status === EmployeeStatus.INACTIVO) {
+                return res.status(403).json({ msg: 'La cuenta está inactiva' });
+            }
+
+            const role = normalizeRole(employee.role);
 
             req.user = {
                 uid: decodedToken.uid,
-                email: decodedToken.email,
-                role: decodedToken.role || 'AUXILIAR',
-                permissions: decodedToken.permissions || []
+                email: employee.email || decodedToken.email,
+                employeeId: employee?._id?.toString(),
+                employeeNumber: employee?.employeeNumber,
+                name: employee?.name,
+                department: employee?.department,
+                role,
+                permissions: employee?.permissions || []
             };
 
             next();
@@ -37,13 +53,7 @@ export class AuthMiddleware {
             if (!user) {
                 return res.status(403).json({ msg: 'Usuario no autenticado' });
             }
-            console.log(user.permissions)
-            console.log(requiredPermission)
-
-
             const userPermissionsArray = formatPermissions(user.permissions || {});
-            
-            console.log(userPermissionsArray && userPermissionsArray.includes(requiredPermission))
 
             if (userPermissionsArray && userPermissionsArray.includes(requiredPermission)) {
                 return next();
@@ -65,11 +75,23 @@ export class AuthMiddleware {
 
     static requireRole(allowedRoles: string[]) {
         return (req: Request, res: Response, next: NextFunction) => {
-            if (req.user?.role === ROLES.ADMIN) return next();
-
             if (!req.user || !allowedRoles.includes(req.user.role)) {
                 return res.status(403).json({ msg: 'No tienes permisos suficientes' });
             }
+            next();
+        };
+    }
+
+    static requireRoleOrDepartment(allowedRoles: string[], allowedDepartment: string) {
+        return (req: Request, res: Response, next: NextFunction) => {
+            const user = req.user;
+            const hasAllowedRole = Boolean(user && allowedRoles.includes(user.role));
+            const hasAllowedDepartment = normalizeDepartment(user?.department) === normalizeDepartment(allowedDepartment);
+
+            if (!user || (!hasAllowedRole && !hasAllowedDepartment)) {
+                return res.status(403).json({ msg: 'No tienes permisos suficientes' });
+            }
+
             next();
         };
     }
@@ -98,8 +120,7 @@ export class AuthMiddleware {
             const { uid: currentUserUid, role } = req.user as any;
             const targetUid = req.params.uid;
 
-            //const accessGranted = await AuthMiddleware.checkHierarchy(currentUserUid, role, targetUid);
-            const accessGranted = true;
+            const accessGranted = role === ROLES.ADMIN || currentUserUid === targetUid;
 
             if (accessGranted) return next();
 
@@ -134,8 +155,7 @@ export class AuthMiddleware {
                     return res.status(403).json({ msg: 'El recurso no tiene propietario asignado' });
                 }
 
-                //const accessGranted = await AuthMiddleware.checkHierarchy(currentUserUid, role, resourceOwnerUid);
-                const accessGranted = true;
+                const accessGranted = currentUserUid === resourceOwnerUid;
 
                 if (accessGranted) {
                     (req as any).resource = resource;
@@ -218,3 +238,35 @@ const formatPermissions = (permissionsObj: any) => {
         .filter(key => permissionsObj[key] === true)
         .map(key => key.replace(/_/g, '.'));
 };
+
+async function getEmployeeAuthProfile(uid?: string, email?: string) {
+    const employees = (await connect()).collection('employees');
+
+    if (uid) {
+        const employeeByUid = await employees.findOne({ uid });
+        if (employeeByUid) return employeeByUid;
+    }
+
+    if (!email) return null;
+
+    return employees.findOne({
+        email: email.trim().toLowerCase(),
+        $or: [{ uid: { $exists: false } }, { uid: null }, { uid: '' }],
+    });
+}
+
+function normalizeRole(role?: string) {
+    if (role === ROLES.ADMIN || role === 'Admin' || role === 'ADMIN') return ROLES.ADMIN;
+    if (role === ROLES.JEFE_DIRECTOR || role === 'manager' || role === 'Manager') return ROLES.JEFE_DIRECTOR;
+    if (role === ROLES.EMPLEADO || role === 'employee' || role === 'Empleado') return ROLES.EMPLEADO;
+
+    return ROLES.EMPLEADO;
+}
+
+function normalizeDepartment(department?: string) {
+    return (department || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
+}

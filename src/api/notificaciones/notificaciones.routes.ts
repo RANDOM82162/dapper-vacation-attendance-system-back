@@ -16,6 +16,10 @@ router.patch("/marcar-leida/:id",
     AuthMiddleware.verifyToken,
     controller.marcarLeidaController);
 
+router.patch("/marcar-no-leida/:id",
+    AuthMiddleware.verifyToken,
+    controller.marcarNoLeidaController);
+
 router.patch("/marcar-todas-leidas",
     AuthMiddleware.verifyToken,
     controller.marcarTodasLeidasController);

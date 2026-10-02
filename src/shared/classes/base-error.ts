@@ -5,6 +5,7 @@ export class BaseError extends Error {
     public readonly methodName: string;
     public readonly httpCode: number;
     public readonly isOperational: boolean;
+    public readonly internalCause?: unknown;
 
     constructor(
         log: string,
@@ -13,27 +14,32 @@ export class BaseError extends Error {
         httpCode = HttpStatusCode.INTERNAL_SERVER,
         isOperational = true
     ) {
-        super(<string>message);
+        const hasSafeMessage = typeof message === "string";
+        super(hasSafeMessage ? message as string : "Ocurrió un error interno.");
         Object.setPrototypeOf(this, new.target.prototype);
         this.log = log;
         if (methodName) this.methodName = methodName;
         this.httpCode = httpCode;
-        this.isOperational = isOperational;
+        this.isOperational = isOperational && hasSafeMessage;
+        this.internalCause = hasSafeMessage ? undefined : message;
         Error.captureStackTrace(this);
     }
 
     static buildErrorMessage(error: BaseError | unknown):object{
-        if(!(error instanceof BaseError)){
+        if (
+            !(error instanceof BaseError) ||
+            !error.isOperational ||
+            error.internalCause !== undefined ||
+            error.httpCode >= 500
+        ) {
             return {
                 status: 500,
-                message: "An unexpected error ocurred",
-                error: error
-            }           
+                message: "Ocurrió un error interno."
+            };
         }
         return {
             code: error?.httpCode || 500,
-            message: error?.message || "Base error, could not define message",
-            method: error?.methodName || ""
+            message: error?.message || "Ocurrió un error interno."
         };
     }
 }

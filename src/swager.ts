@@ -24,8 +24,8 @@ const options = {
     ],
   },
   apis: [
-    './src/api/**/*.routes.ts',
-    './src/api/**/*.swagger.ts',
+    `${__dirname.replace(/\\/g, '/')}/api/**/*.routes.{ts,js}`,
+    `${__dirname.replace(/\\/g, '/')}/api/**/*.swagger.{ts,js}`,
   ]
 };
 

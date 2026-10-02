@@ -6,7 +6,7 @@ import {
     PaginacionRespuesta
 } from "./notificacionesDto";
 
-const COLLECTION = "notificaciones";
+const COLLECTION = "notifications";
 
 export async function createNotificacionMongo(notificacion: Notificacion) {
   try {
@@ -16,6 +16,34 @@ export async function createNotificacionMongo(notificacion: Notificacion) {
     return response;
   } catch (error) {
     throw new BaseError("Inside catch: ", error, "createNotificacionMongo");
+  }
+}
+
+export async function ensureReminderNotificationIndex() {
+  const db = await connect();
+  return db.collection<Notificacion>(COLLECTION).createIndex(
+    { recordatorioKey: 1, usuario_id: 1 },
+    {
+      unique: true,
+      partialFilterExpression: { recordatorioKey: { $exists: true } },
+      name: "unique_vacation_reminder_per_user",
+    },
+  );
+}
+
+export async function createReminderNotificacionMongo(notificacion: Notificacion) {
+  try {
+    const db = await connect();
+    const dbRef = db.collection<Notificacion>(COLLECTION);
+    const response = await dbRef.updateOne(
+      { recordatorioKey: notificacion.recordatorioKey, usuario_id: notificacion.usuario_id },
+      { $setOnInsert: notificacion },
+      { upsert: true },
+    );
+
+    return response.upsertedId?._id || null;
+  } catch (error) {
+    throw new BaseError("Inside catch: ", error, "createReminderNotificacionMongo");
   }
 }
 
@@ -62,16 +90,29 @@ export async function getNotificacionesMongo(filters: GetNotificacionesFilters):
   }
 }
 
-export async function marcarLeidaMongo(id: string) {
+export async function marcarLeidaMongo(id: string, usuarioId: string) {
     try {
       const db = await connect();
       const dbRef = db.collection<Notificacion>(COLLECTION);
       return await dbRef.updateOne(
-        { _id: getMongoId(id) },
+        { _id: getMongoId(id), usuario_id: usuarioId },
         { $set: { leido: true } }
       );
     } catch (error) {
       throw new BaseError("Inside catch: ", error, "marcarLeidaMongo");
+    }
+}
+
+export async function marcarNoLeidaMongo(id: string, usuarioId: string) {
+    try {
+      const db = await connect();
+      const dbRef = db.collection<Notificacion>(COLLECTION);
+      return await dbRef.updateOne(
+        { _id: getMongoId(id), usuario_id: usuarioId },
+        { $set: { leido: false } }
+      );
+    } catch (error) {
+      throw new BaseError("Inside catch: ", error, "marcarNoLeidaMongo");
     }
 }
 

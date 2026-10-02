@@ -78,6 +78,7 @@
 # .env.test.local
 # .env.production.local
 # .env.local
+# .env..example
 # # parcel-bundler cache (https://parceljs.org/)
 # .cache
 # .parcel-cache
@@ -126,13 +127,20 @@
 # .pnp.*
 
 /node_modules
-# .env
+.env*
+!.env.example
 # folky-dev-firebase.json
 /dist
 
+# Datos locales de desarrollo, no incluir empleados de prueba en la entrega.
+/src/scripts/createQuickEmployees.ts
+
 # Agregado por Agente - archivos sensibles del backend Dapper
 firebase-service-account.json
+google-calendar-service-account.json
 *.firebase-service-account.json
 service-account*.json
 *-service-account.json
 test-error.log
+backend-error.log
+firebase-debug.log

@@ -1,10 +1,9 @@
 import bunyan, { LogLevel } from 'bunyan';
-import fs from 'fs';
 
 // Crea un stream para el archivo de error
 const errorStream = {
     level: 'error',
-    path: './test-error.log', // Ruta del archivo de error
+    path: './backend-error.log',
 };
 
 // Crea un stream para la salida estándar
@@ -14,8 +13,8 @@ const stdoutStream = {
 };
 
 export const logger = bunyan.createLogger({
-    name: 'test-service',
+    name: 'dapper-vacations-backend',
     streams: [stdoutStream, errorStream],
 });
 
-logger.info('test-service logger started');
+logger.info('dapper-vacations-backend logger started');

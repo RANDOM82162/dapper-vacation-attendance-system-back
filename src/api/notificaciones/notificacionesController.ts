@@ -65,6 +65,19 @@ export async function marcarLeidaController(
   } catch (error) { next(error); }
 }
 
+export async function marcarNoLeidaController(
+  req: express.Request | any, res: express.Response, next: NextFunction
+) {
+  try {
+    const { id } = req.params;
+    const currentUser = req.user;
+    if (!id) throw new ParametersError("Missing id", "marcarNoLeida", HttpStatusCode.BAD_REQUEST);
+
+    const serviceResponse = await service.marcarNoLeida(id, currentUser);
+    res.status(200).send({ status: HttpStatusCode.OK, message: "Notificación marcada como no leída", data: serviceResponse });
+  } catch (error) { next(error); }
+}
+
 export async function marcarTodasLeidasController(
   req: express.Request | any, res: express.Response, next: NextFunction
 ) {

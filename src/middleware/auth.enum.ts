@@ -5,6 +5,10 @@ declare global {
             user?: {
                 uid?: string;
                 email?: string;
+                employeeId?: string;
+                employeeNumber?: string;
+                name?: string;
+                department?: string;
                 role: string;
                 permissions: {}; 
             }
@@ -14,6 +18,8 @@ declare global {
 
 export const ROLES = {
     ADMIN: 'Administrador',
+    EMPLEADO: 'Empleado',
+    JEFE_DIRECTOR: 'Jefe/Director',
     DESPACHO: 'DESPACHO',
     CONTRIBUYENTE: 'CONTRIBUYENTE',
     AUXILIAR: 'AUXILIAR'
@@ -26,6 +32,12 @@ export const PERMISSIONS = {
     ADMIN_CREATE: 'admin.create',
     ADMIN_UPDATE: 'admin.update',
     ADMIN_DELETE: 'admin.delete',
+
+    //Empleados
+    EMPLOYEE_READ: 'employee.read',
+    EMPLOYEE_CREATE: 'employee.create',
+    EMPLOYEE_UPDATE: 'employee.update',
+    EMPLOYEE_DELETE: 'employee.delete',
 
     //Despacho
     DESPACHO_READ: 'despacho.read',

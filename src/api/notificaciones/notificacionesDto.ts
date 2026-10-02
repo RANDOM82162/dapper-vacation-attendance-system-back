@@ -25,6 +25,7 @@ export interface Notificacion {
   fecha: Date;             // Para mostrar "20 Oct. 2026 10:00 AM"
   link_accion?: string;    // Opcional: si al dar click lleva a una vista (ej. "actualizalo")
   creationDateTS: number;
+  recordatorioKey?: string;
 }
 
 // DTO para Creación (Interno del sistema o API)

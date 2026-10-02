@@ -1,6 +1,4 @@
-import nodemailer from 'nodemailer';
-import ejs from 'ejs';
-import path from 'path';
+import axios from "axios";
 
 interface UserMailData {
   name: string;
@@ -10,128 +8,174 @@ interface UserMailData {
   role: string;
 }
 
-interface AccessRequestData {
+interface BrevoRecipient {
   email: string;
-  message: string;
+  name?: string;
 }
 
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: "smtp-relay.brevo.com",
-    port: 587,
-    secure: false,
-    auth: {
-      user: "facturacion@dappertechnologies.com",
-      pass: "xsmtpsib-3f8bbad1c81ecfb555e19854871cd01ccbce776b5de5aa8c5b82c87da0915a67-FHcJUhSjG3YqZN0x", 
-    },
-  });
-};
+interface SendBrevoTemplateEmailParams {
+  to: BrevoRecipient[];
+  templateId?: string;
+  params: Record<string, unknown>;
+  subject?: string;
+  replyTo?: BrevoRecipient;
+}
 
-export async function sendAccessRequest(requestData: AccessRequestData, adminEmail: string) {
-  console.log('Procesando solicitud de acceso de:', requestData.email);
+interface VacationMailData {
+  folio: string;
+  employeeName: string;
+  employeeEmail?: string;
+  department: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  paidDays?: number;
+  unpaidDays?: number;
+  status: string;
+  comments?: string;
+  managerComment?: string;
+  reviewerName?: string;
+  link?: string;
+}
 
-  try {
-    const transporter = createTransporter();
-    const currentYear = new Date().getFullYear();
+const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
-    const htmlAdmin = await ejs.renderFile(
-      "src/api/mail/requestAccessAdmin.ejs", 
-      {
-        data: requestData,
-        year: currentYear
-      }
-    );
+function isBrevoEnabled() {
+  return process.env.BREVO_ENABLED === "true" && Boolean(process.env.BREVO_API_KEY);
+}
 
-    await transporter.sendMail({
-      from: '"Web +Conta" <no-reply@tudominio.com>',
-      to: adminEmail, 
-      replyTo: requestData.email,
-      subject: `Solicitud de Ingreso: ${requestData.email}`,
-      html: htmlAdmin,
-    });
-    console.log(`Notificación de solicitud enviada al admin (${adminEmail}).`);
+function getSender() {
+  return {
+    name: process.env.BREVO_SENDER_NAME || "Dapper RH",
+    email: process.env.BREVO_SENDER_EMAIL || "no-reply@dappertechnologies.com",
+  };
+}
 
-    const htmlUser = await ejs.renderFile(
-      "src/api/mail/requestReceivedUser.ejs",
-      {
-        data: requestData,
-        year: currentYear
-      }
-    );
+function getTemplateId(value?: string) {
+  const templateId = Number(value);
+  return Number.isFinite(templateId) && templateId > 0 ? templateId : undefined;
+}
 
-    await transporter.sendMail({
-      from: '"+Conta Soporte" <no-reply@tudominio.com>',
-      to: requestData.email,
-      subject: 'Hemos recibido tu solicitud de acceso',
-      html: htmlUser,
-    });
-    console.log('Correo de confirmación enviado al solicitante.');
-
-    return "Proceso de solicitud finalizado con éxito";
-
-  } catch (error) {
-    console.error("Error al enviar correos de solicitud:", error);
-    throw error;
+async function sendBrevoTemplateEmail(data: SendBrevoTemplateEmailParams) {
+  if (!isBrevoEnabled()) {
+    console.log("Brevo no configurado; correo omitido.");
+    return false;
   }
+
+  const templateId = getTemplateId(data.templateId);
+
+  if (!templateId) {
+    console.log("Template de Brevo no configurado; correo omitido.");
+    return false;
+  }
+
+  await axios.post(
+    BREVO_API_URL,
+    {
+      sender: getSender(),
+      to: data.to,
+      templateId,
+      params: data.params,
+      subject: data.subject,
+      replyTo: data.replyTo,
+    },
+    {
+      headers: {
+        "api-key": process.env.BREVO_API_KEY || "",
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+    },
+  );
+
+  return true;
 }
 
 export async function sendNewUserCredentials(userData: UserMailData, notificationEmail?: string) {
-  console.log('Iniciando proceso de envío de credenciales para:', userData.email);
-
-  try {
-    let transporter = nodemailer.createTransport({
-      host: "smtp-relay.brevo.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: "facturacion@dappertechnologies.com",
-        pass: "xsmtpsib-3f8bbad1c81ecfb555e19854871cd01ccbce776b5de5aa8c5b82c87da0915a67-FHcJUhSjG3YqZN0x", 
+  if (notificationEmail) {
+    await sendBrevoTemplateEmail({
+      to: [{ email: notificationEmail }],
+      templateId: process.env.BREVO_TEMPLATE_NEW_USER_ADMIN_ID,
+      subject: `Nuevo usuario creado: ${userData.name}`,
+      params: {
+        user: userData,
+        name: userData.name,
+        email: userData.email,
+        role: userData.role,
+        employeeNumber: userData.id,
+        year: new Date().getFullYear(),
       },
     });
-
-    let currentYear = new Date().getFullYear();
-
-    if (notificationEmail) {
-        let htmlAdmin = await ejs.renderFile(
-          "src/api/mail/newUserAdmin.ejs", 
-          {
-            user: userData,
-            year: currentYear
-          }
-        );
-
-        await transporter.sendMail({
-          from: '"Sistema +Conta" <no-reply@tudominio.com>', 
-          to: notificationEmail,
-          cc: 'a.roano@dappertechnologies.com', 
-          subject: `Nuevo Usuario Creado: ${userData.name} (${userData.role})`,
-          html: htmlAdmin,
-        });
-        console.log(`Notificación enviada a ${notificationEmail}.`);
-    }
-
-    if (userData.email && userData.password) {
-        let htmlUser = await ejs.renderFile(
-          "src/api/mail/credentialsUser.ejs",
-          {
-            user: userData,
-            year: currentYear
-          }
-        );
-    
-        await transporter.sendMail({
-          from: '"+Conta Accesos" <no-reply@tudominio.com>',
-          to: userData.email,
-          subject: 'Bienvenido a +Conta - Tus Credenciales de Acceso',
-          html: htmlUser,
-        });
-        console.log('Credenciales enviadas al usuario.');
-    }
-
-    return "Correos de alta enviados correctamente";
-
-  } catch (error) {
-    console.error("Error al enviar correos de alta:", error);
-    throw error;
   }
+
+  if (userData.email && userData.password) {
+    await sendBrevoTemplateEmail({
+      to: [{ email: userData.email, name: userData.name }],
+      templateId: process.env.BREVO_TEMPLATE_NEW_USER_CREDENTIALS_ID,
+      subject: "Bienvenido a Dapper RH",
+      params: {
+        user: userData,
+        name: userData.name,
+        email: userData.email,
+        password: userData.password,
+        role: userData.role,
+        employeeNumber: userData.id,
+        year: new Date().getFullYear(),
+      },
+    });
+  }
+
+  return "Correos de alta procesados";
+}
+
+export async function sendVacationRequestCreatedEmail(request: VacationMailData, recipients: BrevoRecipient[]) {
+  return sendBrevoTemplateEmail({
+    to: uniqueRecipients(recipients),
+    templateId: process.env.BREVO_TEMPLATE_VACATION_REQUEST_CREATED_ID,
+    subject: `Nueva solicitud de vacaciones ${request.folio}`,
+    params: buildVacationTemplateParams(request),
+  });
+}
+
+export async function sendVacationStatusChangedEmail(request: VacationMailData) {
+  if (!request.employeeEmail) return false;
+
+  return sendBrevoTemplateEmail({
+    to: [{ email: request.employeeEmail, name: request.employeeName }],
+    templateId: process.env.BREVO_TEMPLATE_VACATION_STATUS_CHANGED_ID,
+    subject: `Tu solicitud ${request.folio} fue actualizada`,
+    params: buildVacationTemplateParams(request),
+  });
+}
+
+function buildVacationTemplateParams(request: VacationMailData) {
+  return {
+    folio: request.folio,
+    employeeName: request.employeeName,
+    employeeEmail: request.employeeEmail || "",
+    department: request.department,
+    startDate: request.startDate,
+    endDate: request.endDate,
+    days: request.days,
+    paidDays: request.paidDays ?? request.days,
+    unpaidDays: request.unpaidDays ?? 0,
+    status: request.status,
+    comments: request.comments || "",
+    managerComment: request.managerComment || "",
+    reviewerName: request.reviewerName || "",
+    link: request.link || "",
+    year: new Date().getFullYear(),
+  };
+}
+
+function uniqueRecipients(recipients: BrevoRecipient[]) {
+  const unique = new Map<string, BrevoRecipient>();
+
+  for (const recipient of recipients) {
+    const email = recipient.email?.trim().toLowerCase();
+    if (!email) continue;
+    unique.set(email, { ...recipient, email });
+  }
+
+  return Array.from(unique.values());
 }

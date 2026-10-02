@@ -20,13 +20,25 @@ export class ErrorHandler {
 }
 
 export function buildErrorMessage(error: BaseError | unknown): ApiResponse {
+    if (
+        !(error instanceof BaseError) ||
+        !error.isOperational ||
+        error.internalCause !== undefined ||
+        error.httpCode >= 500
+    ) {
+        return {
+            hasError: true,
+            status: 500,
+            message: "Ocurrió un error interno.",
+            errorType: "INTERNAL_ERROR"
+        };
+    }
+
     if (error instanceof ParametersError) {
         return {
             hasError: true,
             status: error.httpCode,
             message: error.message,
-            errorDetails: error?.fields?.length > 0 ? { "missingFields": error.fields } : {},
-            methodName: error.methodName,
             errorType: "PARAMETERS_ERROR"
         }
     }
@@ -35,7 +47,6 @@ export function buildErrorMessage(error: BaseError | unknown): ApiResponse {
             hasError: true,
             status: error.httpCode,
             message: error.message,
-            methodName: error.methodName,
             errorType: "NOT_FOUND_ERROR"
         }
     }
@@ -44,7 +55,6 @@ export function buildErrorMessage(error: BaseError | unknown): ApiResponse {
             hasError: true,
             status: error.httpCode,
             message: error.message,
-            methodName: error.methodName,
             errorType: "NOT_AUTHORIZED"
         }
     }
@@ -52,9 +62,7 @@ export function buildErrorMessage(error: BaseError | unknown): ApiResponse {
         return {
             hasError: true,
             status: error.httpCode,
-            message: error.message,
-            errorDetails: error.details,
-            methodName: error.methodName,
+            message: "No se pudo completar la solicitud al servicio externo.",
             errorType: "SW_API_ERROR"
         }
     }
@@ -63,8 +71,7 @@ export function buildErrorMessage(error: BaseError | unknown): ApiResponse {
         return {
             hasError: true,
             status: error.httpCode,
-            message: error.message,
-            methodName: error.methodName,
+            message: "No se pudo validar el certificado.",
             errorType: "CERTIFICATE_ERROR"
         }
     }
@@ -75,24 +82,13 @@ export function buildErrorMessage(error: BaseError | unknown): ApiResponse {
             status: error.httpCode,
             message: error.message,
             errorType: "BASE_ERROR",
-            methodName: error.methodName,
-            errorDetails: error,
         }
-    }
-    if (error instanceof Error) {
-        return {
-            hasError: true,
-            message: "UNEXPECTED_ERROR",
-            errorType: "UNEXPECTED_ERROR",
-            status: 500,
-            errorDetails: error.message
-        };
     }
     return {
         hasError: true,
-        message: "UNKNOWN_ERROR",
-        errorType: "UNKNOWN_ERROR",
-        status: 500,
+        message: "Ocurrió un error interno.",
+        errorType: "INTERNAL_ERROR",
+        status: 500
     };
 
 }

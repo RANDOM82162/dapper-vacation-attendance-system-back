@@ -1,14 +1,9 @@
 node_modules
 dist
+.git
 .env*
-cors.json
-masconta-firebase.json
-npm-debug.log
-firebase-export/
-
-# Agregado por Agente - archivos sensibles del backend Dapper
-firebase-service-account.json
-*.firebase-service-account.json
-service-account*.json
-*-service-account.json
+!.env.example
+*service-account*.json
+firebase-debug.log
 test-error.log
+backend-error.log

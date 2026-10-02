@@ -12,30 +12,38 @@ const client: MongoClient = new MongoClient(url, {
 });
 
 let connection: Db;
+let connectionPromise: Promise<Db> | null = null;
 
 
 export async function initializeMongo(req: express.Request, res: express.Response, next: express.NextFunction) {
-  console.log("initializing mongo....");
-  console.log(req.url);
-  console.log(connection == undefined ? 'undefined' : 'exists');
-
-  if (!connection) {
-    await client.connect();
-    connection = client.db(dbName);
+  try {
+    await connect();
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
 }
 
 async function getClient() {
   return client;
 }
 
-async function connect(dbName?: string) {
-  try {
-    return connection;
-  } catch (error) {
-    throw error;
+async function connect(databaseName?: string) {
+  if (connection) return connection;
+
+  if (!connectionPromise) {
+    connectionPromise = client.connect()
+      .then(() => {
+        connection = client.db(databaseName || dbName);
+        return connection;
+      })
+      .catch((error) => {
+        connectionPromise = null;
+        throw error;
+      });
   }
+
+  return connectionPromise;
 }
 
 
